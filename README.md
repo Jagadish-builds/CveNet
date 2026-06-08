@@ -1,53 +1,115 @@
 # CveNet
 
-Multi-agent CVE security analysis system built with ASP.NET Core Minimal APIs on Azure Kubernetes Service.
+A multi-agent CVE security analysis system built with **ASP.NET Core Minimal APIs** on **Azure Kubernetes Service**. Ask a natural-language question about vulnerabilities — CveNet parses your intent, retrieves matching CVEs from a vector search index, scores them by risk, and synthesizes an executive-ready report.
 
-## Secret management
+> Built on Azure free-tier services where possible — great for learning, prototyping, or running at low volume.
 
-`k8s/config.yaml` and all `appsettings.json` files are **git-ignored** — they may contain real API keys.
-Committed templates (`*.template.json`, `k8s/config.yaml.template`) contain the structure with empty values.
+---
+
+## How it works
+
+```
+Your question (plain English)
+        │
+        ▼
+  Orchestrator  ──► PromptParser   →  understands what you're asking
+        │       ──► CveSearch      →  retrieves matching CVEs via RAG
+        │       ──► Prioritization →  scores by CVSS + recency + severity
+        └─────────► Report         →  writes an executive summary + recommendations
+```
+
+**Example query**
+```json
+POST /analyze
+{
+  "text": "What are the critical CVEs affecting Apache Log4j in the last 90 days?"
+}
+```
+
+**Example response** (abbreviated)
+```json
+{
+  "report": {
+    "reportId": "A3F9C1",
+    "executiveSummary": "Three critical Log4j vulnerabilities remain unpatched...",
+    "topCves": [
+      { "cveId": "CVE-2021-44228", "cvssScore": 10.0, "severity": "Critical", ... }
+    ],
+    "recommendations": "1. Apply Log4j patch 2.17.1 immediately...",
+    "blobUri": "https://..."
+  },
+  "elapsedMs": 3210
+}
+```
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Services | ASP.NET Core 9 Minimal APIs (C#) |
+| LLM | Azure OpenAI `gpt-35-turbo` via `Microsoft.Extensions.AI` |
+| Vector search | Azure AI Search (RAG) |
+| Report storage | Azure Blob Storage (optional) |
+| Container runtime | Docker (multi-stage build) |
+| Orchestration | Azure Kubernetes Service (AKS) |
+
+---
+
+## Project structure
+
+```
+CveNet/
+├── CveNet.sln
+├── Dockerfile                          # Single multi-stage build, --build-arg PROJECT=
+├── k8s/
+│   ├── config.yaml.template            # Namespace + Secret + ConfigMap (fill in keys)
+│   └── deployments.yaml                # Deployments, Services, HPAs for all 5 agents
+└── src/
+    ├── CveNet.Shared/                  # Shared records (models/contracts)
+    ├── CveNet.Orchestrator/            # Entry point — routes query through the pipeline
+    ├── CveNet.PromptParser/            # LLM-powered intent classification
+    ├── CveNet.CveSearch/               # RAG retrieval from Azure AI Search
+    ├── CveNet.Prioritization/          # Composite risk scoring (CVSS + recency + severity)
+    └── CveNet.Report/                  # Report synthesis + optional Blob persistence
+```
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- [.NET 9 SDK](https://dotnet.microsoft.com/download)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
+- `kubectl` ([install guide](https://kubernetes.io/docs/tasks/tools/))
+- An Azure subscription ([free account](https://azure.microsoft.com/free/) works)
+
+### 1. Clone and set up config files
 
 ```bash
-# First-time setup: copy templates, then fill in real values
+git clone https://github.com/JagadishKumarL/CveNet.git
+cd CveNet
+
+# Copy templates — these are the files you'll fill with real keys (never committed)
 cp k8s/config.yaml.template k8s/config.yaml
-cp src/CveNet.Orchestrator/appsettings.template.json src/CveNet.Orchestrator/appsettings.json
-# ... repeat for each service, then add real keys
+
+for svc in Orchestrator PromptParser CveSearch Prioritization Report; do
+  cp src/CveNet.$svc/appsettings.template.json src/CveNet.$svc/appsettings.json
+done
 ```
 
-## Architecture
+### 2. Create Azure resources
 
-```
-User Query
-    │
-    ▼
-CveNet.Orchestrator  (LoadBalancer :8080)
-    │
-    ├─── POST /parse  ──────► CveNet.PromptParser   (ClusterIP)
-    │                              └── Azure OpenAI (gpt-35-turbo)
-    │
-    ├─── POST /search ──────► CveNet.CveSearch       (ClusterIP)
-    │                              ├── Azure AI Search (RAG)
-    │                              └── Azure OpenAI (LLM fallback)
-    │
-    ├─── POST /prioritize ──► CveNet.Prioritization  (ClusterIP)
-    │                              └── Composite scoring + Azure OpenAI
-    │
-    └─── POST /report ──────► CveNet.Report          (ClusterIP)
-                                   ├── Azure OpenAI (synthesis)
-                                   └── Azure Blob Storage (optional)
+#### Resource group
+
+```bash
+az group create --name cvenet-rg --location eastus
 ```
 
-## Prerequisites
-
-- .NET 9 SDK
-- Docker
-- Azure CLI (`az`)
-- `kubectl` + AKS cluster
-- Azure resources: OpenAI (Free), AI Search (Free), Storage (optional)
-
-## Azure Resource Setup
-
-### 1. Azure OpenAI (Free Tier)
+#### Azure OpenAI
 
 ```bash
 az cognitiveservices account create \
@@ -66,23 +128,23 @@ az cognitiveservices account deployment create \
   --model-format OpenAI \
   --sku-capacity 1 \
   --sku-name Standard
+```
 
-# Get endpoint and key
+Get your endpoint and key:
+```bash
 az cognitiveservices account show \
-  --name cvenet-oai \
-  --resource-group cvenet-rg \
+  --name cvenet-oai --resource-group cvenet-rg \
   --query properties.endpoint -o tsv
 
 az cognitiveservices account keys list \
-  --name cvenet-oai \
-  --resource-group cvenet-rg \
+  --name cvenet-oai --resource-group cvenet-rg \
   --query key1 -o tsv
 ```
 
-> **Free Tier Limit:** 1 request/min, 1,000 tokens/min, 10,000 tokens/day on gpt-35-turbo.
-> Each pipeline run makes ~4 LLM calls. Budget ~5 analyses/day on free tier.
+> **Free tier:** 1 req/min · 1K tokens/min · 10K tokens/day.
+> CveNet makes ~4 LLM calls per query — budget ~5 full analyses/day on free tier.
 
-### 2. Azure AI Search (Free Tier)
+#### Azure AI Search
 
 ```bash
 az search service create \
@@ -91,65 +153,108 @@ az search service create \
   --sku Free \
   --location eastus
 
-# Get endpoint (https://<name>.search.windows.net)
+# Endpoint and admin key
 az search service show \
-  --name cvenet-search \
-  --resource-group cvenet-rg \
+  --name cvenet-search --resource-group cvenet-rg \
   --query properties.hostName -o tsv
 
-# Get admin key
 az search admin-key show \
-  --service-name cvenet-search \
-  --resource-group cvenet-rg \
+  --service-name cvenet-search --resource-group cvenet-rg \
   --query primaryKey -o tsv
 ```
 
-> **Free Tier Limit:** 1 index, 50MB storage, 10,000 documents, 3 replicas max.
-
-#### Create the cvenet-index
-
+Create the `cvenet-index`:
 ```bash
-# Create index with required fields
 curl -X PUT "https://cvenet-search.search.windows.net/indexes/cvenet-index?api-version=2023-11-01" \
   -H "Content-Type: application/json" \
   -H "api-key: <SEARCH_ADMIN_KEY>" \
   -d '{
     "name": "cvenet-index",
     "fields": [
-      {"name": "id",               "type": "Edm.String", "key": true, "searchable": false},
-      {"name": "cveId",            "type": "Edm.String", "searchable": true, "filterable": true},
-      {"name": "description",      "type": "Edm.String", "searchable": true},
-      {"name": "cvssScore",        "type": "Edm.Double", "filterable": true, "sortable": true},
-      {"name": "severity",         "type": "Edm.String", "filterable": true, "facetable": true},
-      {"name": "affectedProducts", "type": "Collection(Edm.String)", "searchable": true},
-      {"name": "publishedDate",    "type": "Edm.DateTimeOffset", "filterable": true, "sortable": true},
-      {"name": "references",       "type": "Edm.String", "searchable": false},
-      {"name": "remediation",      "type": "Edm.String", "searchable": true}
+      {"name": "id",               "type": "Edm.String",               "key": true,  "searchable": false},
+      {"name": "cveId",            "type": "Edm.String",               "searchable": true, "filterable": true},
+      {"name": "description",      "type": "Edm.String",               "searchable": true},
+      {"name": "cvssScore",        "type": "Edm.Double",               "filterable": true, "sortable": true},
+      {"name": "severity",         "type": "Edm.String",               "filterable": true, "facetable": true},
+      {"name": "affectedProducts", "type": "Collection(Edm.String)",   "searchable": true},
+      {"name": "publishedDate",    "type": "Edm.DateTimeOffset",       "filterable": true, "sortable": true},
+      {"name": "references",       "type": "Edm.String",               "searchable": false},
+      {"name": "remediation",      "type": "Edm.String",               "searchable": true}
     ]
   }'
 ```
 
-### 3. Azure Blob Storage (Optional)
+> **Free tier:** 1 index · 50MB storage · 10K documents max.
+
+> **Note:** If the index is empty, CveSearch automatically falls back to LLM knowledge for known CVE IDs so the pipeline still works while you populate your index.
+
+#### Azure Blob Storage (optional — for saving reports)
 
 ```bash
 az storage account create \
   --name cvenetstorage \
   --resource-group cvenet-rg \
-  --sku Standard_LRS \
-  --kind StorageV2
+  --sku Standard_LRS
 
 az storage container create \
   --name cvenet-reports \
   --account-name cvenetstorage
 
-# Get connection string
 az storage account show-connection-string \
-  --name cvenetstorage \
-  --resource-group cvenet-rg \
+  --name cvenetstorage --resource-group cvenet-rg \
   --query connectionString -o tsv
 ```
 
-### 4. AKS Cluster
+### 3. Fill in config
+
+Edit `k8s/config.yaml` — paste base64-encoded values into the Secret section:
+
+```bash
+echo -n "https://cvenet-oai.openai.azure.com/" | base64   # → AZUREOPENAI__ENDPOINT
+echo -n "<your-oai-key>"                        | base64   # → AZUREOPENAI__APIKEY
+echo -n "https://cvenet-search.search.windows.net" | base64 # → AZURESEARCH__ENDPOINT
+echo -n "<your-search-key>"                     | base64   # → AZURESEARCH__APIKEY
+echo -n "<your-storage-connection-string>"      | base64   # → AZURESTORAGE__CONNECTIONSTRING
+```
+
+For local development, fill the same values directly into each `appsettings.json`.
+
+### 4. Run locally
+
+```bash
+# Terminal 1 — PromptParser
+cd src/CveNet.PromptParser && dotnet run --urls http://localhost:5001
+
+# Terminal 2 — CveSearch
+cd src/CveNet.CveSearch && dotnet run --urls http://localhost:5002
+
+# Terminal 3 — Prioritization
+cd src/CveNet.Prioritization && dotnet run --urls http://localhost:5003
+
+# Terminal 4 — Report
+cd src/CveNet.Report && dotnet run --urls http://localhost:5004
+
+# Terminal 5 — Orchestrator (override agent URLs for local)
+cd src/CveNet.Orchestrator
+Agents__PromptParser=http://localhost:5001 \
+Agents__CveSearch=http://localhost:5002 \
+Agents__Prioritization=http://localhost:5003 \
+Agents__Report=http://localhost:5004 \
+dotnet run --urls http://localhost:5000
+```
+
+Test it:
+```bash
+curl -X POST http://localhost:5000/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Show me critical vulnerabilities in OpenSSL from 2024"}'
+```
+
+---
+
+## Deploying to AKS
+
+### Create the cluster
 
 ```bash
 az aks create \
@@ -159,128 +264,80 @@ az aks create \
   --node-vm-size Standard_B2s \
   --generate-ssh-keys
 
-az aks get-credentials \
-  --name cvenet-aks \
-  --resource-group cvenet-rg
+az aks get-credentials --name cvenet-aks --resource-group cvenet-rg
 ```
 
-## Build & Push Images
+### Build and push images
 
 ```bash
 ACR_NAME=<your-acr-name>
-
 az acr login --name $ACR_NAME
 
-# Build and push each service
 for SERVICE in Orchestrator PromptParser CveSearch Prioritization Report; do
-  IMAGE_NAME=$(echo $SERVICE | tr '[:upper:]' '[:lower:]')
-  docker build \
-    --build-arg PROJECT=CveNet.$SERVICE \
-    -t $ACR_NAME.azurecr.io/cvenet-$IMAGE_NAME:latest \
-    .
-  docker push $ACR_NAME.azurecr.io/cvenet-$IMAGE_NAME:latest
+  IMAGE=$(echo $SERVICE | tr '[:upper:]' '[:lower:]')
+  docker build --build-arg PROJECT=CveNet.$SERVICE \
+    -t $ACR_NAME.azurecr.io/cvenet-$IMAGE:latest .
+  docker push $ACR_NAME.azurecr.io/cvenet-$IMAGE:latest
 done
 ```
 
-## Kubernetes Deployment
-
-### 1. Populate Secrets
+### Apply manifests
 
 ```bash
-# Base64-encode each value
-OAI_ENDPOINT=$(echo -n "https://cvenet-oai.openai.azure.com/" | base64)
-OAI_KEY=$(echo -n "<your-oai-key>" | base64)
-SEARCH_ENDPOINT=$(echo -n "https://cvenet-search.search.windows.net" | base64)
-SEARCH_KEY=$(echo -n "<your-search-key>" | base64)
-BLOB_CONN=$(echo -n "<your-storage-connection-string>" | base64)
-
-# Edit k8s/config.yaml and paste the base64 values into the Secret data section
-```
-
-### 2. Apply manifests
-
-```bash
-# Namespace, Secret, ConfigMap
 kubectl apply -f k8s/config.yaml
 
-# Update <ACR_NAME> in deployments.yaml, then:
 sed -i "s/<ACR_NAME>/$ACR_NAME/g" k8s/deployments.yaml
 kubectl apply -f k8s/deployments.yaml
 
-# Verify all pods are running
-kubectl get pods -n cvenet
-kubectl get svc -n cvenet
+# Watch pods come up
+kubectl get pods -n cvenet -w
 ```
 
-### 3. Test the API
+### Call the API
 
 ```bash
-# Get orchestrator external IP
-EXTERNAL_IP=$(kubectl get svc cvenet-orchestrator-svc -n cvenet -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+EXTERNAL_IP=$(kubectl get svc cvenet-orchestrator-svc -n cvenet \
+  -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
-# Example query
 curl -X POST http://$EXTERNAL_IP:8080/analyze \
   -H "Content-Type: application/json" \
-  -d '{
-    "text": "What are the critical CVEs affecting Apache Log4j in the last 90 days?",
-    "sessionId": "test-001"
-  }'
+  -d '{"text": "What critical CVEs affected Apache Log4j in the last 90 days?"}'
 ```
 
-## Local Development
+> **Tip:** Stop the AKS cluster when not in use to pause VM billing:
+> `az aks stop --name cvenet-aks --resource-group cvenet-rg`
+
+---
+
+## Free tier cost summary
+
+| Service | Free limit | Notes |
+|---|---|---|
+| Azure OpenAI F0 | 1 req/min · 1K tokens/min · 10K tokens/day | ~5 full analyses/day |
+| Azure AI Search | 1 index · 50MB · 10K docs | Sufficient for a CVE dataset |
+| Azure Blob Storage | 5GB/month (LRS) | Reports are small JSON files |
+| AKS (B2s × 2 nodes) | ~$140/month | No free tier — stop when idle |
+
+---
+
+## Secret management
+
+`k8s/config.yaml` and all `appsettings.json` files are **git-ignored** and must never be committed.
+The `*.template.json` and `k8s/config.yaml.template` files are committed placeholders — they contain the expected structure with empty values.
 
 ```bash
-# Run individual services locally (requires appsettings filled in)
-cd src/CveNet.Orchestrator && dotnet run
-
-# Or set env vars inline
-AzureOpenAI__Endpoint="https://..." AzureOpenAI__ApiKey="..." dotnet run
+# Always work from templates
+cp k8s/config.yaml.template k8s/config.yaml
+cp src/CveNet.<Service>/appsettings.template.json src/CveNet.<Service>/appsettings.json
+# Then fill in real keys — these files stay local only
 ```
 
-Override agent URLs for local testing in `appsettings.Development.json`:
+---
 
-```json
-{
-  "Agents": {
-    "PromptParser":   "http://localhost:5001",
-    "CveSearch":      "http://localhost:5002",
-    "Prioritization": "http://localhost:5003",
-    "Report":         "http://localhost:5004"
-  }
-}
-```
+## Contributing
 
-## Free Tier Limits Summary
+Issues and pull requests are welcome. Please open an issue first for significant changes.
 
-| Service            | Limit                                                   |
-|--------------------|---------------------------------------------------------|
-| Azure OpenAI F0    | 1 req/min, 1K tokens/min, 10K tokens/day                |
-| Azure AI Search F  | 1 index, 50MB, 10K docs, 3 units max                    |
-| AKS (B2s × 2)      | ~$140/month (no free tier; use `az aks stop` when idle) |
-| Blob Storage       | First 5GB free/month (LRS)                              |
+## License
 
-> **Tip:** Run `az aks stop --name cvenet-aks --resource-group cvenet-rg` when not in use to pause the AKS billing clock.
-
-## Project Structure
-
-```
-CveNet/
-├── CveNet.sln
-├── Dockerfile                    # Multi-stage, --build-arg PROJECT=
-├── k8s/
-│   ├── config.yaml               # Namespace, Secret, ConfigMap
-│   └── deployments.yaml          # Deployments, Services, HPAs
-└── src/
-    ├── CveNet.Shared/            # Shared models (records)
-    │   └── Models/
-    ├── CveNet.Orchestrator/      # Entry point, fan-out pipeline
-    │   └── Services/OrchestratorService.cs
-    ├── CveNet.PromptParser/      # Intent classification via LLM
-    │   └── Services/PromptParserService.cs
-    ├── CveNet.CveSearch/         # RAG retrieval from Azure AI Search
-    │   └── Services/CveSearchService.cs
-    ├── CveNet.Prioritization/    # Composite risk scoring
-    │   └── Services/PrioritizationService.cs
-    └── CveNet.Report/            # Report synthesis + Blob persistence
-        └── Services/ReportService.cs
-```
+MIT
