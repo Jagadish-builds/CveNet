@@ -12,7 +12,8 @@ public class PromptParserService(
 
     public async Task<ParsedIntent> ParseAsync(UserQuery query, CancellationToken ct = default)
     {
-        logger.LogInformation("Parsing intent for query: {Query}", query.Text);
+        logger.LogInformation("Parsing intent for query of length {Length}", query.Text.Length);
+        logger.LogDebug("Query text: {Query}", query.Text);
 
         var systemPrompt = """
             You are a CVE security query parser. Analyze the user's query and extract structured information.

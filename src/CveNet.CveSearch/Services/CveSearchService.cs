@@ -89,7 +89,7 @@ public class CveSearchService(
                 References: doc.GetString("references"),
                 Remediation: doc.GetString("remediation"));
         }
-        catch
+        catch (Exception ex) when (ex is InvalidCastException or FormatException or KeyNotFoundException)
         {
             return null;
         }

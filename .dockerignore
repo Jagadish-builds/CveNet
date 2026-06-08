@@ -1,0 +1,20 @@
+# Secrets — never bake real keys into an image
+src/**/appsettings.json
+src/**/appsettings.*.json
+k8s/config.yaml
+
+# Build artifacts
+**/bin/
+**/obj/
+
+# Git & IDE
+.git/
+.gitignore
+.claude/
+.vs/
+*.user
+
+# Docs (not needed in image)
+README.md
+SECURITY.md
+LICENSE
