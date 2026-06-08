@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cvenet
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cvenet-secrets
+  namespace: cvenet
+type: Opaque
+data:
+  # Run: echo -n "your-value" | base64
+  AZUREOPENAI__ENDPOINT: ""
+  AZUREOPENAI__APIKEY: ""
+  AZURESEARCH__ENDPOINT: ""
+  AZURESEARCH__APIKEY: ""
+  AZURESTORAGE__CONNECTIONSTRING: ""
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cvenet-config
+  namespace: cvenet
+data:
+  AZUREOPENAI__DEPLOYMENT: "gpt-35-turbo"
+  AZURESEARCH__INDEXNAME: "cvenet-index"
+  ASPNETCORE_ENVIRONMENT: "Production"
+  ASPNETCORE_URLS: "http://+:8080"
+  AGENTS__PROMPTPARSER: "http://cvenet-promptparser-svc:8080"
+  AGENTS__CVESEARCH: "http://cvenet-cvesearch-svc:8080"
+  AGENTS__PRIORITIZATION: "http://cvenet-prioritization-svc:8080"
+  AGENTS__REPORT: "http://cvenet-report-svc:8080"

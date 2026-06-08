@@ -1,0 +1,20 @@
+# ── Secrets / config with real keys ──────────────────────────────────────────
+k8s/config.yaml
+src/**/appsettings.json
+src/**/appsettings.*.json
+!src/**/appsettings.template.json
+
+# ── .NET build artifacts ──────────────────────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+.dockerignore
+
+# ── OS noise ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

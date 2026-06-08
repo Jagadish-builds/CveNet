@@ -2,6 +2,18 @@
 
 Multi-agent CVE security analysis system built with ASP.NET Core Minimal APIs on Azure Kubernetes Service.
 
+## Secret management
+
+`k8s/config.yaml` and all `appsettings.json` files are **git-ignored** — they may contain real API keys.
+Committed templates (`*.template.json`, `k8s/config.yaml.template`) contain the structure with empty values.
+
+```bash
+# First-time setup: copy templates, then fill in real values
+cp k8s/config.yaml.template k8s/config.yaml
+cp src/CveNet.Orchestrator/appsettings.template.json src/CveNet.Orchestrator/appsettings.json
+# ... repeat for each service, then add real keys
+```
+
 ## Architecture
 
 ```
