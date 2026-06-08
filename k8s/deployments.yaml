@@ -1,0 +1,434 @@
+# ── Helper template reference ─────────────────────────────────────────────────
+# All services share the same envFrom (Secret + ConfigMap).
+# Each Deployment references the image built with --build-arg PROJECT=<name>.
+# Replace <ACR_NAME> with your Azure Container Registry name.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CveNet.Orchestrator
+# ══════════════════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cvenet-orchestrator
+  namespace: cvenet
+  labels:
+    app: cvenet-orchestrator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cvenet-orchestrator
+  template:
+    metadata:
+      labels:
+        app: cvenet-orchestrator
+    spec:
+      containers:
+        - name: orchestrator
+          image: <ACR_NAME>.azurecr.io/cvenet-orchestrator:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: cvenet-secrets
+            - configMapRef:
+                name: cvenet-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cvenet-orchestrator-svc
+  namespace: cvenet
+spec:
+  selector:
+    app: cvenet-orchestrator
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: LoadBalancer   # Expose orchestrator externally; agents use ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cvenet-orchestrator-hpa
+  namespace: cvenet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cvenet-orchestrator
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CveNet.PromptParser
+# ══════════════════════════════════════════════════════════════════════════════
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cvenet-promptparser
+  namespace: cvenet
+  labels:
+    app: cvenet-promptparser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cvenet-promptparser
+  template:
+    metadata:
+      labels:
+        app: cvenet-promptparser
+    spec:
+      containers:
+        - name: promptparser
+          image: <ACR_NAME>.azurecr.io/cvenet-promptparser:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: cvenet-secrets
+            - configMapRef:
+                name: cvenet-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cvenet-promptparser-svc
+  namespace: cvenet
+spec:
+  selector:
+    app: cvenet-promptparser
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cvenet-promptparser-hpa
+  namespace: cvenet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cvenet-promptparser
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CveNet.CveSearch
+# ══════════════════════════════════════════════════════════════════════════════
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cvenet-cvesearch
+  namespace: cvenet
+  labels:
+    app: cvenet-cvesearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cvenet-cvesearch
+  template:
+    metadata:
+      labels:
+        app: cvenet-cvesearch
+    spec:
+      containers:
+        - name: cvesearch
+          image: <ACR_NAME>.azurecr.io/cvenet-cvesearch:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: cvenet-secrets
+            - configMapRef:
+                name: cvenet-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cvenet-cvesearch-svc
+  namespace: cvenet
+spec:
+  selector:
+    app: cvenet-cvesearch
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cvenet-cvesearch-hpa
+  namespace: cvenet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cvenet-cvesearch
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CveNet.Prioritization
+# ══════════════════════════════════════════════════════════════════════════════
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cvenet-prioritization
+  namespace: cvenet
+  labels:
+    app: cvenet-prioritization
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cvenet-prioritization
+  template:
+    metadata:
+      labels:
+        app: cvenet-prioritization
+    spec:
+      containers:
+        - name: prioritization
+          image: <ACR_NAME>.azurecr.io/cvenet-prioritization:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: cvenet-secrets
+            - configMapRef:
+                name: cvenet-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cvenet-prioritization-svc
+  namespace: cvenet
+spec:
+  selector:
+    app: cvenet-prioritization
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cvenet-prioritization-hpa
+  namespace: cvenet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cvenet-prioritization
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CveNet.Report
+# ══════════════════════════════════════════════════════════════════════════════
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cvenet-report
+  namespace: cvenet
+  labels:
+    app: cvenet-report
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cvenet-report
+  template:
+    metadata:
+      labels:
+        app: cvenet-report
+    spec:
+      containers:
+        - name: report
+          image: <ACR_NAME>.azurecr.io/cvenet-report:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: cvenet-secrets
+            - configMapRef:
+                name: cvenet-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cvenet-report-svc
+  namespace: cvenet
+spec:
+  selector:
+    app: cvenet-report
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cvenet-report-hpa
+  namespace: cvenet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cvenet-report
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
