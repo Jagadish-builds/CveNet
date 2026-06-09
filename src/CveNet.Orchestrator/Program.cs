@@ -14,7 +14,7 @@ void AddAgentClient(string name)
     builder.Services.AddHttpClient(name, c =>
     {
         c.BaseAddress = new Uri(baseUrl);
-        c.Timeout = TimeSpan.FromSeconds(30);
+        c.Timeout = TimeSpan.FromSeconds(120);
     });
 }
 
@@ -26,6 +26,20 @@ AddAgentClient("Report");
 builder.Services.AddSingleton<OrchestratorService>();
 
 var app = builder.Build();
+
+app.Use(async (context, next) => {
+    try { await next(); }
+    catch (Exception ex)
+    {
+        var logger = context.RequestServices
+            .GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex,
+            "Unhandled exception: {Message}", ex.Message);
+        context.Response.StatusCode = 500;
+        await context.Response.WriteAsync(
+            $"Error: {ex.Message}\n{ex.InnerException?.Message}");
+    }
+});
 
 app.MapHealthChecks("/health");
 

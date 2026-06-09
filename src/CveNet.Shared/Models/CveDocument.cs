@@ -12,7 +12,7 @@ public record CveDocument(
 
 public record CveSearchRequest(
     ParsedIntent Intent,
-    int MaxResults = 10);
+    int TopK = 10);
 
 public record CveSearchResult(
     CveDocument[] Documents,

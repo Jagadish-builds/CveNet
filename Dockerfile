@@ -27,7 +27,6 @@ RUN dotnet publish "src/${PROJECT}/${PROJECT}.csproj" \
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
-ARG PROJECT
 WORKDIR /app
 
 # Non-root user for security
@@ -42,5 +41,4 @@ ENV ASPNETCORE_ENVIRONMENT=Production
 
 EXPOSE 8080
 
-# ARG doesn't survive into exec-form ENTRYPOINT; use shell form so the variable expands.
-ENTRYPOINT dotnet ${PROJECT}.dll
+ENTRYPOINT ["sh", "-c", "dotnet $(ls /app/*.runtimeconfig.json | head -1 | sed 's/\\.runtimeconfig\\.json/.dll/')"]

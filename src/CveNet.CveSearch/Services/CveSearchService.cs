@@ -23,29 +23,46 @@ public class CveSearchService(
         // Build search query from intent
         string searchQuery = BuildSearchQuery(intent);
 
-        var options = new SearchOptions
+        var searchOptions = new SearchOptions
         {
-            Size = request.MaxResults,
+            Size = request.TopK,
             Select = {
-                "cveId", "description", "cvssScore", "severity",
-                "affectedProducts", "publishedDate", "references", "remediation"
+                "cveId", "description", "cvssScore",
+                "severity", "vendor", "product",
+                "published", "references"
             }
         };
 
-        // Apply severity filter if specified
-        if (!string.IsNullOrEmpty(intent.Severity))
-            options.Filter = $"severity eq '{intent.Severity}'";
+        if (intent.Severity is not null)
+            searchOptions.Filter = $"severity eq '{intent.Severity}'";
 
-        logger.LogDebug("Azure AI Search query: {Query}, filter: {Filter}", searchQuery, options.Filter);
-
-        var results = await searchClient.SearchAsync<SearchDocument>(searchQuery, options, ct);
-
-        var docs = new List<CveDocument>();
-        await foreach (var result in results.Value.GetResultsAsync())
+        if (intent.CveIds.Length > 0)
         {
-            var doc = MapSearchDocument(result.Document);
-            if (doc is not null)
-                docs.Add(doc);
+            var idFilter = string.Join(" or ",
+                intent.CveIds.Select(id => $"cveId eq '{id}'"));
+            searchOptions.Filter = searchOptions.Filter is null
+                ? idFilter
+                : $"({searchOptions.Filter}) and ({idFilter})";
+        }
+
+        logger.LogDebug("Azure AI Search query: {Query}, filter: {Filter}", searchQuery, searchOptions.Filter);
+
+        List<CveDocument> docs;
+        try
+        {
+            var results = await searchClient.SearchAsync<SearchDocument>(searchQuery, searchOptions, ct);
+            docs = new List<CveDocument>();
+            await foreach (var result in results.Value.GetResultsAsync())
+            {
+                var doc = MapSearchDocument(result.Document);
+                if (doc is not null)
+                    docs.Add(doc);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Azure AI Search failed: {Message}", ex.Message);
+            throw;
         }
 
         logger.LogInformation("Retrieved {Count} CVE documents from Azure AI Search", docs.Count);
@@ -75,19 +92,31 @@ public class CveSearchService(
     {
         try
         {
+            var vendor = doc.GetString("vendor");
+            var product = doc.GetString("product");
+            var affectedProducts = new[] { vendor, product }
+                .Where(s => !string.IsNullOrEmpty(s))
+                .Select(s => s!)
+                .ToArray();
+
+            DateOnly publishedDate = DateOnly.MinValue;
+            if (doc.TryGetValue("published", out var pubVal))
+            {
+                if (pubVal is DateTimeOffset dto)
+                    publishedDate = DateOnly.FromDateTime(dto.DateTime);
+                else if (pubVal is string s && DateOnly.TryParse(s, out var d))
+                    publishedDate = d;
+            }
+
             return new CveDocument(
                 CveId: doc.GetString("cveId") ?? string.Empty,
                 Description: doc.GetString("description") ?? string.Empty,
                 CvssScore: doc.TryGetValue("cvssScore", out var score) ? Convert.ToDouble(score) : 0.0,
                 Severity: doc.GetString("severity") ?? "Unknown",
-                AffectedProducts: doc.TryGetValue("affectedProducts", out var prods) && prods is IEnumerable<object> list
-                    ? list.Select(p => p.ToString() ?? "").ToArray()
-                    : [],
-                PublishedDate: doc.TryGetValue("publishedDate", out var date) && date is DateTimeOffset dto
-                    ? DateOnly.FromDateTime(dto.DateTime)
-                    : DateOnly.MinValue,
+                AffectedProducts: affectedProducts,
+                PublishedDate: publishedDate,
                 References: doc.GetString("references"),
-                Remediation: doc.GetString("remediation"));
+                Remediation: null);
         }
         catch (Exception ex) when (ex is InvalidCastException or FormatException or KeyNotFoundException)
         {
@@ -99,11 +128,11 @@ public class CveSearchService(
     {
         logger.LogInformation("No index results found; using LLM fallback for {Count} CVE IDs", cveIds.Length);
 
-        var prompt = $"""
-            Provide structured JSON descriptions for these CVE IDs: {string.Join(", ", cveIds)}.
+        var prompt = $$"""
+            Provide structured JSON descriptions for these CVE IDs: {{string.Join(", ", cveIds)}}.
             Return a JSON array where each element has:
-            {{"cveId": "", "description": "", "cvssScore": 0.0, "severity": "Critical|High|Medium|Low",
-              "affectedProducts": [], "publishedDate": "YYYY-MM-DD", "references": "", "remediation": ""}}
+            {"cveId": "", "description": "", "cvssScore": 0.0, "severity": "Critical|High|Medium|Low",
+              "affectedProducts": [], "publishedDate": "YYYY-MM-DD", "references": "", "remediation": ""}
             Use your training knowledge. If unknown, estimate conservatively.
             """;
 

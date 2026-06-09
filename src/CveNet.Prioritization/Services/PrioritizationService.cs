@@ -50,7 +50,7 @@ public class PrioritizationService(
         };
 
         // Recency component: docs within 30 days = 20pts, 90 days = 15, 180 days = 10, else 0
-        var ageInDays = (DateOnly.FromDateTime(DateTime.UtcNow) - doc.PublishedDate).TotalDays;
+        var ageInDays = DateOnly.FromDateTime(DateTime.UtcNow).DayNumber - doc.PublishedDate.DayNumber;
         double recencyComponent = ageInDays switch
         {
             <= 30 => 20.0,
