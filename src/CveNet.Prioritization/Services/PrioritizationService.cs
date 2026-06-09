@@ -1,37 +1,24 @@
 using CveNet.Shared.Models;
-using Microsoft.Extensions.AI;
-using System.Text;
-using System.Text.Json;
 
 namespace CveNet.Prioritization.Services;
 
-public class PrioritizationService(
-    IChatClient chatClient,
-    ILogger<PrioritizationService> logger)
+public class PrioritizationService(ILogger<PrioritizationService> logger)
 {
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
-
-    public async Task<PrioritizationResult> PrioritizeAsync(PrioritizationRequest request, CancellationToken ct = default)
+    public Task<PrioritizationResult> PrioritizeAsync(PrioritizationRequest request, CancellationToken ct = default)
     {
         var docs = request.SearchResult.Documents;
         logger.LogInformation("Prioritizing {Count} CVE documents", docs.Length);
 
         if (docs.Length == 0)
-            return new PrioritizationResult([], "No CVEs found matching the query.");
+            return Task.FromResult(new PrioritizationResult([], "No CVEs found matching the query."));
 
-        // Compute composite scores using CVSS + recency + severity weight
         var scored = docs.Select(doc => ScoreDocument(doc)).ToArray();
-
-        // Sort by composite score descending
         Array.Sort(scored, (a, b) => b.CompositeScore.CompareTo(a.CompositeScore));
-
-        // Use LLM to generate a natural-language summary
-        var summary = await GenerateSummaryAsync(scored, request.Intent, ct);
 
         logger.LogInformation("Prioritization complete. Top CVE: {TopCve} (score: {Score:F2})",
             scored[0].Document.CveId, scored[0].CompositeScore);
 
-        return new PrioritizationResult(scored, summary);
+        return Task.FromResult(new PrioritizationResult(scored, string.Empty));
     }
 
     private static ScoredCve ScoreDocument(CveDocument doc)
@@ -66,23 +53,5 @@ public class PrioritizationService(
         return new ScoredCve(doc, composite, breakdown);
     }
 
-    private async Task<string> GenerateSummaryAsync(ScoredCve[] scored, ParsedIntent intent, CancellationToken ct)
-    {
-        var top5 = scored.Take(5).ToArray();
-        var sb = new StringBuilder();
-        sb.AppendLine("Top CVEs by composite risk score:");
-        foreach (var s in top5)
-            sb.AppendLine($"- {s.Document.CveId} (CVSS {s.Document.CvssScore}, {s.Document.Severity}): {s.Document.Description[..Math.Min(100, s.Document.Description.Length)]}...");
 
-        var prompt = $"""
-            You are a security analyst. Based on the following prioritized CVE list, write a concise 2-3 sentence
-            executive summary of the security risk landscape relevant to the query intent: "{intent.NormalizedQuery}".
-            Focus on the highest-priority items and their potential business impact.
-
-            {sb}
-            """;
-
-        var response = await chatClient.GetResponseAsync(prompt, cancellationToken: ct);
-        return response.Text.Trim();
-    }
 }

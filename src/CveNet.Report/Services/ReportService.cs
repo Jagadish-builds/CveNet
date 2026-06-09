@@ -24,8 +24,11 @@ public class ReportService(
 
         var reportId = Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
 
-        var executiveSummary = await GenerateExecutiveSummaryAsync(request, ct);
-        var recommendations = await GenerateRecommendationsAsync(request, ct);
+        var summaryTask = GenerateExecutiveSummaryAsync(request, ct);
+        var recommendationsTask = GenerateRecommendationsAsync(request, ct);
+        await Task.WhenAll(summaryTask, recommendationsTask);
+        var executiveSummary = summaryTask.Result;
+        var recommendations = recommendationsTask.Result;
 
         var report = new CveReport(
             ReportId: reportId,
