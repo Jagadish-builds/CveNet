@@ -15,7 +15,7 @@ metadata:
   labels:
     app: cvenet-orchestrator
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: cvenet-orchestrator
@@ -48,11 +48,11 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: "100m"
+              cpu: "50m"
               memory: "128Mi"
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "300m"
+              memory: "256Mi"
 
 ---
 apiVersion: v1
@@ -134,11 +134,11 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: "100m"
+              cpu: "50m"
               memory: "128Mi"
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "300m"
+              memory: "256Mi"
 
 ---
 apiVersion: v1
@@ -220,11 +220,11 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: "100m"
+              cpu: "50m"
               memory: "128Mi"
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "300m"
+              memory: "256Mi"
 
 ---
 apiVersion: v1
@@ -306,11 +306,11 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: "100m"
+              cpu: "50m"
               memory: "128Mi"
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "300m"
+              memory: "256Mi"
 
 ---
 apiVersion: v1
@@ -392,11 +392,11 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: "100m"
+              cpu: "50m"
               memory: "128Mi"
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "300m"
+              memory: "256Mi"
 
 ---
 apiVersion: v1
