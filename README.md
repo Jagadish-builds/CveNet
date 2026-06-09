@@ -8,55 +8,7 @@ A multi-agent CVE security analysis system built with **ASP.NET Core Minimal API
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    User(["🧑 User\n(Natural Language Query)"])
-
-    subgraph AKS["☸️ Azure Kubernetes Service — namespace: cvenet"]
-        Orch["🎯 Orchestrator\n<i>Entry point · LoadBalancer :8080</i>"]
-
-        subgraph Agents["AI Agents  (ClusterIP — internal only)"]
-            PP["🧠 PromptParser\n<i>Intent classification</i>\n<i>Keyword &amp; CVE ID extraction</i>"]
-            CS["🔍 CveSearch\n<i>RAG retrieval</i>\n<i>LLM fallback for known CVEs</i>"]
-            PRI["⚖️ Prioritization\n<i>Composite risk scoring</i>\n<i>CVSS + recency + severity</i>"]
-            REP["📄 Report\n<i>Executive summary</i>\n<i>Recommendations synthesis</i>"]
-        end
-    end
-
-    subgraph AzureAI["☁️ Azure AI Services"]
-        OAI["🤖 Azure OpenAI\ngpt-35-turbo\n<i>Intent parsing · Summaries</i>\n<i>Recommendations · Fallback</i>"]
-        AIS["🗂️ Azure AI Search\ncvenet-index\n<i>Vector / full-text RAG</i>"]
-    end
-
-    Blob["🪣 Azure Blob Storage\ncvenet-reports\n<i>Optional JSON persistence</i>"]
-
-    User -->|"POST /analyze"| Orch
-    Orch -->|"POST /parse"| PP
-    PP -->|"ParsedIntent"| Orch
-    Orch -->|"POST /search"| CS
-    CS -->|"CveSearchResult"| Orch
-    Orch -->|"POST /prioritize"| PRI
-    PRI -->|"PrioritizationResult"| Orch
-    Orch -->|"POST /report"| REP
-    REP -->|"AnalysisResponse"| User
-
-    PP -. "LLM call" .-> OAI
-    CS -. "LLM call\n(fallback)" .-> OAI
-    CS -. "RAG query" .-> AIS
-    PRI -. "LLM call\n(summary)" .-> OAI
-    REP -. "LLM call\n(synthesis)" .-> OAI
-    REP -. "persist report" .-> Blob
-
-    style OAI fill:#0078d4,color:#fff,stroke:#005a9e
-    style AIS fill:#0078d4,color:#fff,stroke:#005a9e
-    style Blob fill:#0078d4,color:#fff,stroke:#005a9e
-    style PP fill:#6a0dad,color:#fff,stroke:#4a0080
-    style CS fill:#6a0dad,color:#fff,stroke:#4a0080
-    style PRI fill:#6a0dad,color:#fff,stroke:#4a0080
-    style REP fill:#6a0dad,color:#fff,stroke:#4a0080
-    style Orch fill:#107c10,color:#fff,stroke:#0a5c0a
-    style User fill:#e8f4e8,color:#000,stroke:#107c10
-```
+![CveNet Pipeline](docs/pipeline.svg)
 
 ---
 
