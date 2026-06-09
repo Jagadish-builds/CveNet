@@ -292,11 +292,17 @@ done
 
 ### Apply manifests
 
+Use `deploy.sh` to generate `k8s/config.yaml` from env vars and apply everything:
+
 ```bash
-kubectl apply -f k8s/config.yaml
+export AZURE_OPENAI_ENDPOINT="https://<your-oai-resource>.openai.azure.com/"
+export AZURE_OPENAI_KEY="<your-oai-key>"
+export AZURE_SEARCH_ENDPOINT="https://<your-search-resource>.search.windows.net"
+export AZURE_SEARCH_KEY="<your-search-key>"
+export AZURE_STORAGE_CONN="<your-storage-connection-string>"  # optional
 
 sed -i "s/<ACR_NAME>/$ACR_NAME/g" k8s/deployments.yaml
-kubectl apply -f k8s/deployments.yaml
+bash deploy.sh
 
 # Watch pods come up
 kubectl get pods -n cvenet -w
@@ -333,6 +339,8 @@ curl -X POST http://$EXTERNAL_IP:8080/analyze \
 
 `k8s/config.yaml` and all `appsettings.json` files are **git-ignored** and must never be committed.
 The `*.template.json` and `k8s/config.yaml.template` files are committed placeholders — they contain the expected structure with empty values.
+
+> **Note for contributors:** The `appsettings.json` files are excluded from git via `.gitignore`. Always copy from the template and fill in your own keys locally — never `git add` them.
 
 ```bash
 # Always work from templates

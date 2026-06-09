@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ── Guard: require secret env vars ───────────────────────────────────────────
+# ── Guard: require env vars ───────────────────────────────────────────────────
+if [[ -z "${AZURE_OPENAI_ENDPOINT:-}" ]]; then
+  echo "ERROR: AZURE_OPENAI_ENDPOINT is not set (e.g. https://<your-resource>.openai.azure.com/)" >&2; exit 1
+fi
 if [[ -z "${AZURE_OPENAI_KEY:-}" ]]; then
   echo "ERROR: AZURE_OPENAI_KEY is not set" >&2; exit 1
+fi
+if [[ -z "${AZURE_SEARCH_ENDPOINT:-}" ]]; then
+  echo "ERROR: AZURE_SEARCH_ENDPOINT is not set (e.g. https://<your-resource>.search.windows.net)" >&2; exit 1
 fi
 if [[ -z "${AZURE_SEARCH_KEY:-}" ]]; then
   echo "ERROR: AZURE_SEARCH_KEY is not set" >&2; exit 1
 fi
 
 # ── Base64-encode secret values ───────────────────────────────────────────────
-B64_OPENAI_ENDPOINT=$(echo -n "https://cvenet-openai.openai.azure.com/" | base64)
+B64_OPENAI_ENDPOINT=$(echo -n "${AZURE_OPENAI_ENDPOINT}" | base64)
 B64_OPENAI_KEY=$(echo -n "${AZURE_OPENAI_KEY}" | base64)
-B64_SEARCH_ENDPOINT=$(echo -n "https://cvenet-search.search.windows.net" | base64)
+B64_SEARCH_ENDPOINT=$(echo -n "${AZURE_SEARCH_ENDPOINT}" | base64)
 B64_SEARCH_KEY=$(echo -n "${AZURE_SEARCH_KEY}" | base64)
-B64_STORAGE_CONN=$(echo -n "" | base64)
+B64_STORAGE_CONN=$(echo -n "${AZURE_STORAGE_CONN:-}" | base64)
 
 # ── Write populated config.yaml ───────────────────────────────────────────────
 cat > k8s/config.yaml <<EOF
