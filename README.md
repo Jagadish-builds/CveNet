@@ -8,18 +8,19 @@ A multi-agent CVE security analysis system built with **ASP.NET Core Minimal API
 
 ## Architecture
 
-![CveNet Pipeline](docs/pipeline.svg)
-
----
-
-## Live demo
-
 A walkthrough of the multi-agent pipeline — orchestrator fan-out, parallel agent calls, and convergence into the final report.
 
 <video src="docs/architecture-demo.mov" controls width="720">
   Your browser doesn't support embedded video —
   <a href="docs/architecture-demo.mov">watch architecture-demo.mov</a> directly.
 </video>
+
+<details>
+<summary>Static diagram</summary>
+
+![CveNet Pipeline](docs/pipeline.svg)
+
+</details>
 
 ---
 
