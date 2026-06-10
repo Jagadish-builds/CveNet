@@ -111,7 +111,7 @@ CveNet/
 ### 1. Clone and set up config files
 
 ```bash
-git clone https://github.com/JagadishKumarL/CveNet.git
+git clone https://github.com/Jagadish-builds/CveNet.git
 cd CveNet
 
 # Copy templates — these are the files you'll fill with real keys (never committed)
