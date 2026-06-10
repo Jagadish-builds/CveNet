@@ -28,10 +28,10 @@ A walkthrough of the multi-agent pipeline — orchestrator fan-out, parallel age
 
 | Agent | AI service used | What it does |
 |---|---|---|
-| **PromptParser** | Azure OpenAI `gpt-35-turbo` | Classifies query intent, extracts CVE IDs, keywords, product names, severity, and date range from free-text input |
+| **PromptParser** | Azure OpenAI `gpt-4.1-mini` | Classifies query intent, extracts CVE IDs, keywords, product names, severity, and date range from free-text input |
 | **CveSearch** | Azure AI Search + Azure OpenAI | Full-text + vector RAG retrieval against `cvenet-index`; falls back to LLM training knowledge when the index returns no results |
-| **Prioritization** | Azure OpenAI `gpt-35-turbo` | Deterministic composite risk scoring (CVSS 0–50 pts, severity 0–30 pts, recency 0–20 pts), then LLM-generated natural-language summary |
-| **Report** | Azure OpenAI `gpt-35-turbo` | Two-pass synthesis: executive summary for leadership + numbered actionable remediation recommendations |
+| **Prioritization** | None — deterministic | Composite risk scoring from CVSS (0–50 pts), severity (0–30 pts), and recency (0–20 pts) — no LLM call |
+| **Report** | Azure OpenAI `gpt-4.1-mini` | Executive summary and remediation recommendations are generated concurrently (`Task.WhenAll`), then assembled into the final report |
 
 All LLM calls use **`Microsoft.Extensions.AI` (`IChatClient`)** — a vendor-neutral abstraction that makes it straightforward to swap Azure OpenAI for another provider.
 
@@ -70,7 +70,7 @@ POST /analyze
 | Layer | Technology |
 |---|---|
 | Services | ASP.NET Core 9 Minimal APIs (C#) |
-| LLM | Azure OpenAI `gpt-35-turbo` via `Microsoft.Extensions.AI` |
+| LLM | Azure OpenAI `gpt-4.1-mini` via `Microsoft.Extensions.AI` |
 | Vector search | Azure AI Search (RAG) |
 | Report storage | Azure Blob Storage (optional) |
 | Container runtime | Docker (multi-stage build) |
@@ -143,9 +143,9 @@ az cognitiveservices account create \
 az cognitiveservices account deployment create \
   --name cvenet-oai \
   --resource-group cvenet-rg \
-  --deployment-name gpt-35-turbo \
-  --model-name gpt-35-turbo \
-  --model-version "0125" \
+  --deployment-name gpt-4.1-mini \
+  --model-name gpt-4.1-mini \
+  --model-version "2025-04-14" \
   --model-format OpenAI \
   --sku-capacity 1 \
   --sku-name Standard
