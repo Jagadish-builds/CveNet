@@ -12,6 +12,17 @@ A multi-agent CVE security analysis system built with **ASP.NET Core Minimal API
 
 ---
 
+## Live demo
+
+A walkthrough of the multi-agent pipeline — orchestrator fan-out, parallel agent calls, and convergence into the final report.
+
+<video src="docs/architecture-demo.mov" controls width="720">
+  Your browser doesn't support embedded video —
+  <a href="docs/architecture-demo.mov">watch architecture-demo.mov</a> directly.
+</video>
+
+---
+
 ## AI features at a glance
 
 | Agent | AI service used | What it does |
